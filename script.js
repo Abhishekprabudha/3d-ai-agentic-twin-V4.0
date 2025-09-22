@@ -1,11 +1,8 @@
 /* =========================================================================
-   Agentic Twin — Disrupt → Correct → Normal + Hub Addition (v5.1)
-   Enhancements:
-   - Hub node drawn at Nagpur only in Hub mode
-   - Hub spokes appear only in Hub mode (baseline network unchanged)
-   - Human-sounding narration (percent, from→to, hours)
-   - Times reported in hours (1 decimal)
-   - No camera auto-centering (same as your v4.1)
+   Agentic Twin — Disrupt → Correct → Normal + Hub Addition (v5.1, robust TTS repeat)
+   Enhancements in this file:
+   - Robust narration repeat: second pass starts after the first actually ends
+   - Idle gap between passes set to 700ms (configurable), no forced cancel
    ======================================================================= */
 
 /* -------------------- tiny debug pill -------------------- */
@@ -332,7 +329,7 @@ function drawFrame(){
   drawWarehouses();
 }
 
-/* -------------------- Narration + Chat ------------------------------------ */
+/* -------------------- Narration + Chat (ROBUST REPEAT) -------------------- */
 const synth=window.speechSynthesis; let VOICE=null;
 function pickVoice(){
   const vs=synth?.getVoices?.()||[];
@@ -406,46 +403,81 @@ const ChatUI = (() => {
   };
 })();
 
+/* ---- ROBUST Narrator: pass #2 waits for real completion of pass #1 ---- */
 const Narrator = (() => {
   let muted = false;
-  let ttsTimers = [];
+
+  // Run token to guard against overlap/re-entrancy
+  let currentRun = 0;
+
+  // Idle gap between passes (ms). You set this to 700; keep configurable.
+  const PASS_IDLE_GAP_MS = 700;
+
+  function newRunToken(){
+    currentRun += 1;
+    return currentRun;
+  }
 
   function clearTTS(){
-    ttsTimers.forEach(clearTimeout); ttsTimers=[];
     try{ synth?.cancel?.(); }catch(e){}
   }
-  function speakOnce(text, rate=0.95){
-    if(muted || !synth || !text) return;
-    const u = new SpeechSynthesisUtterance(String(text));
-    if(VOICE) u.voice = VOICE;
-    u.rate = rate; u.pitch = 1.0; u.volume = 1.0;
-    synth.speak(u);
-  }
-  function measure(lines, rate=0.95, gap=950){
-    let t=0; lines.forEach(line=>{ const d=Math.max(1700,48*line.length); t+=d+gap; }); return t;
-  }
-  function queue(lines, gap=950, rate=0.95){
-    clearTTS();
-    let t=0;
-    lines.forEach(line=>{
-      const d=Math.max(1700,48*line.length);
-      ChatUI.appendSystem(line);
-      ttsTimers.push(setTimeout(()=>speakOnce(line, rate), t));
-      t += d + gap;
+
+  function wait(ms){ return new Promise(res=>setTimeout(res, ms)); }
+
+  function speakOnceAsync(text, rate=0.95, runToken){
+    return new Promise((resolve) => {
+      if(muted || !synth || !text || runToken!==currentRun){
+        // Resolve immediately if muted or superseded
+        return resolve();
+      }
+      const u = new SpeechSynthesisUtterance(String(text));
+      if(VOICE) u.voice = VOICE;
+      u.rate = rate; u.pitch = 1.0; u.volume = 1.0;
+      u.onend = () => resolve();
+      u.onerror = () => resolve(); // resolve on error to avoid stalls
+      synth.speak(u);
     });
   }
-  function queueTwice(lines, gap=950, rate=0.95){
-    clearTTS();
-    const dur = measure(lines, rate, gap);
-    queue(lines, gap, rate);
-    ttsTimers.push(setTimeout(()=>queue(lines, gap, rate), dur+700));
+
+  // One pass: speak each line in order, with gap between lines.
+  async function queueOnce(lines, gap=950, rate=0.95, runToken, preClear=false){
+    if(preClear){
+      clearTTS();  // cancel any prior narration
+    }
+    for(const line of lines){
+      if(runToken!==currentRun) return;       // superseded
+      ChatUI.appendSystem(line);
+      await speakOnceAsync(line, rate, runToken);
+      if(runToken!==currentRun) return;       // superseded
+      if(gap>0) await wait(gap);
+    }
   }
 
+  // Public API
   return {
-    sayLinesTwice: (lines, gap=950, rate=0.95)=>queueTwice(lines, gap, rate),
-    sayOnce: (line)=>{ ChatUI.appendSystem(line); speakOnce(line); },
-    clear: clearTTS,
-    setMuted: (m)=>{ muted = !!m; if(muted) clearTTS(); }
+    // Repeat lines twice, with real completion of pass #1, then idle gap, then pass #2
+    sayLinesTwice: async (lines, gap=950, rate=0.95)=>{
+      const run = newRunToken();      // start a fresh narration run
+      clearTTS();                     // ensure clean start for pass #1
+      await queueOnce(lines, gap, rate, run, /*preClear*/false);
+      if(run!==currentRun) return;    // aborted mid-pass by new run
+      await wait(PASS_IDLE_GAP_MS);   // idle gap between passes
+      if(run!==currentRun) return;    // aborted during idle
+      await queueOnce(lines, gap, rate, run, /*preClear*/false);
+    },
+    sayOnce: (line)=>{
+      const run = newRunToken();
+      clearTTS();
+      ChatUI.appendSystem(line);
+      // fire and forget
+      speakOnceAsync(line, 0.95, run);
+    },
+    clear: ()=>{
+      // Abort any ongoing narration by advancing the run token and cancelling TTS
+      newRunToken();
+      clearTTS();
+    },
+    setMuted: (m)=>{ muted = !!m; if(muted){ newRunToken(); clearTTS(); } }
   };
 })();
 
@@ -785,4 +817,3 @@ async function fetchOrDefault(file, fallback){
 }
 function tick(){ const now=performance.now(); const dt=Math.min(0.05,(now-__lastTS)/1000); __lastTS=now; __dt=dt; drawFrame(); requestAnimationFrame(tick); }
 requestAnimationFrame(tick);
-
