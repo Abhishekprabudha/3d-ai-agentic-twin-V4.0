@@ -41,5 +41,36 @@
       { "delay_ms": 400, "msg": "Initial assessment: Five warehouses online — Delhi, Mumbai, Bangalore, Hyderabad, Kolkata." },
       { "delay_ms": 600, "msg": "Direct flows run O→D with smaller trucks (lower fill)." }
     ]
+  },
+
+  "city": {
+    "baseline": {
+      "policies": {
+        "use_hub": false,
+        "capacity_units": 10,
+        "default_speed_kmph": 55
+      },
+      "warehouses": [
+        { "id": "NE_AP", "location": "Itanagar (Arunachal Pradesh)", "inventory": 120 },
+        { "id": "NE_AS", "location": "Guwahati (Assam)",            "inventory": 160 },
+        { "id": "NE_MN", "location": "Imphal (Manipur)",             "inventory": 110 },
+        { "id": "NE_ML", "location": "Shillong (Meghalaya)",         "inventory": 115 },
+        { "id": "NE_MZ", "location": "Aizawl (Mizoram)",             "inventory": 100 },
+        { "id": "NE_NL", "location": "Kohima (Nagaland)",            "inventory": 105 },
+        { "id": "NE_TR", "location": "Agartala (Tripura)",           "inventory": 130 }
+      ],
+      "trucks": [
+        { "id": "C1", "origin": "WH5", "destination": "NE_AP", "units": 5, "speed_kmph": 55 },
+        { "id": "C2", "origin": "WH5", "destination": "NE_AS", "units": 6, "speed_kmph": 55 },
+        { "id": "C3", "origin": "WH5", "destination": "NE_MN", "units": 5, "speed_kmph": 55 },
+        { "id": "C4", "origin": "WH5", "destination": "NE_ML", "units": 5, "speed_kmph": 55 },
+        { "id": "C5", "origin": "WH5", "destination": "NE_MZ", "units": 5, "speed_kmph": 55 },
+        { "id": "C6", "origin": "WH5", "destination": "NE_NL", "units": 5, "speed_kmph": 55 },
+        { "id": "C7", "origin": "WH5", "destination": "NE_TR", "units": 6, "speed_kmph": 55 }
+      ],
+      "commentary": {
+        "static": "City Addition (baseline): Serving NE India from existing network (no Guwahati hub)."
+      }
+    }
   }
 }
