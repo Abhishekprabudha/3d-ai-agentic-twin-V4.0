@@ -91,6 +91,7 @@
     /* Top-left UI buttons (kept) */
     #ui {
       position: fixed; top: 12px; left: calc(var(--chatW) + 12px); display: flex; gap: 8px; z-index: 10;
+      flex-wrap: wrap;
     }
     #ui button {
       background: #111318; color: #e6e6e6; border: 1px solid #2a2a2a;
@@ -137,7 +138,7 @@
         </div>
         <div id="msgs" role="log" aria-live="polite" aria-relevant="additions"></div>
         <div id="composer">
-          <input id="chatInput" type="text" placeholder="Type: Disrupt / Correct / Normal" autocomplete="off" />
+          <input id="chatInput" type="text" placeholder="Type: Disrupt / Correct / Normal / Hub / City" autocomplete="off" />
           <button id="chatSend">Send</button>
         </div>
       </div>
@@ -146,7 +147,7 @@
     <!-- Map stage -->
     <main id="stage">
       <div id="ui">
-        <!-- script.js will relabel these and add 'Normal' -->
+        <!-- script.js relabels these and adds Normal/Hub/City -->
         <button id="btnBefore">Before Disruption</button>
         <button id="btnAfter">After Correction</button>
       </div>
