@@ -1,8 +1,7 @@
 /* =========================================================================
-   Agentic Twin — Disrupt → Correct → Normal + Hub Addition (v5.1, robust TTS repeat)
-   Enhancements in this file:
-   - Robust narration repeat: second pass starts after the first actually ends
-   - Idle gap between passes set to 700ms (configurable), no forced cancel
+   Agentic Twin — Disrupt → Correct → Normal + Hub Addition + City Addition (v6.0)
+   - Keeps your robust TTS repeat & existing flows intact
+   - Adds Seven Sisters (NE India) + Guwahati hub demo (City Addition)
    ======================================================================= */
 
 /* -------------------- tiny debug pill -------------------- */
@@ -36,6 +35,18 @@ const CITY={
 };
 const HUB={ H_NAG:{name:"Hub — Nagpur", lat:21.1458, lon:79.0882} };
 
+/* ---- NEW: Seven Sisters anchors + Guwahati hub ---- */
+const NE7 = {
+  NE_AP:{ name:"Itanagar — Arunachal Pradesh", lat:27.0844, lon:93.6053 },
+  NE_AS:{ name:"Guwahati — Assam",             lat:26.1445, lon:91.7362 },
+  NE_MN:{ name:"Imphal — Manipur",             lat:24.8170, lon:93.9368 },
+  NE_ML:{ name:"Shillong — Meghalaya",         lat:25.5788, lon:91.8933 },
+  NE_MZ:{ name:"Aizawl — Mizoram",             lat:23.7271, lon:92.7176 },
+  NE_NL:{ name:"Kohima — Nagaland",            lat:25.6747, lon:94.1100 },
+  NE_TR:{ name:"Agartala — Tripura",           lat:23.8315, lon:91.2868 }
+};
+const HUB_CITY = { H_GUW:{ name:"Hub — Guwahati", lat:26.1445, lon:91.7362 } };
+
 /* -------------------- route polylines (lat,lon) -------------------- */
 const RP={
   "WH1-WH2":[[28.6139,77.2090],[27.0,76.8],[25.6,75.2],[24.1,73.5],[23.0,72.6],[21.17,72.83],[19.9,72.9],[19.076,72.8777]],
@@ -49,22 +60,27 @@ const RP={
   "WH5-WH2":[[22.5726,88.3639],[23.5,86.0],[22.5,84.0],[21.5,81.5],[21.1,79.0],[20.3,76.5],[19.3,74.5],[19.0760,72.8777]],
   "WH5-WH3":[[22.5726,88.3639],[21.15,85.8],[19.5,85.8],[17.9,82.7],[16.5,80.3],[13.3409,77.1010],[12.9716,77.5946]]
 };
-/* Hub spokes (Nagpur 21.1458, 79.0882) — included only in Hub mode */
+/* Hub spokes (Nagpur) — included only in Hub mode */
 RP["WH1-H_NAG"]=[[28.6139,77.2090],[26.5,78.2],[24.7,79.0],[22.8,79.2],[21.1458,79.0882]];
 RP["WH2-H_NAG"]=[[19.0760,72.8777],[19.6,74.8],[20.2,76.9],[20.7,78.4],[21.1458,79.0882]];
 RP["WH3-H_NAG"]=[[12.9716,77.5946],[14.6,78.6],[16.8,79.3],[19.0,79.4],[21.1458,79.0882]];
 RP["WH4-H_NAG"]=[[17.3850,78.4867],[18.6,78.9],[19.8,79.2],[20.6,79.2],[21.1458,79.0882]];
 RP["WH5-H_NAG"]=[[22.5726,88.3639],[21.7,86.4],[21.2,83.8],[21.2,81.5],[21.1458,79.0882]];
 
+/* NOTE: For City Addition we intentionally avoid adding RP keys with H_GUW so the base white network
+         remains unchanged. Trucks will still animate using straight fallback lines between anchors. */
+
 const keyFor=(a,b)=>`${a}-${b}`;
 const toLonLat=ll=>ll.map(p=>[p[1],p[0]]);
+function getAnchor(id){
+  return CITY[id] || HUB[id] || NE7[id] || HUB_CITY[id];
+}
 function getRoadLatLon(a,b){
   const k1=keyFor(a,b), k2=keyFor(b,a);
   if(RP[k1]) return RP[k1];
   if(RP[k2]) return [...RP[k2]].reverse();
-  // fallback coords if unseen ID is the hub
-  const ca=(CITY[a]||HUB[a])||{lat:21.1458,lon:79.0882};
-  const cb=(CITY[b]||HUB[b])||{lat:21.1458,lon:79.0882};
+  const ca=getAnchor(a)||{lat:21.1458,lon:79.0882};
+  const cb=getAnchor(b)||{lat:21.1458,lon:79.0882};
   return [[ca.lat,ca.lon],[cb.lat,cb.lon]];
 }
 function expandIDsToLatLon(ids){
@@ -87,6 +103,7 @@ function networkGeoJSON(includeHub){
 
 /* -------------------- scenarios -------------------- */
 let SCN_BEFORE=null, SCN_AFTER=null, SCN_HUB=null;
+let SCN_CITY_BASE=null, SCN_CITY_AFTER=null;
 
 /* -------------------- default scenario (fallback) -------------------- */
 const DEFAULT_BEFORE={
@@ -99,7 +116,7 @@ const DEFAULT_BEFORE={
   policies:{ capacity_units:10, default_speed_kmph:55, use_hub:false }
 };
 
-/* -------------------- Disruption steps (as in your build) -------------------- */
+/* -------------------- Disruption steps (kept) -------------------- */
 const STEPS=[
   {id:"D1",route:["WH1","WH2"],reroute:[["WH1","WH4"],["WH4","WH2"]],
    cause:["Disruption one.","Delhi to Mumbai corridor is closed near Rajasthan.","All trucks on this corridor are safely paused.","Please click the Correct button to apply the AI fix."],
@@ -150,7 +167,9 @@ function resizeCanvas(){
 window.addEventListener("resize",resizeCanvas);
 
 /* -------------------- base network + highlight layers -------------------- */
-let SHOW_HUB=false; // controls hub spokes & hub marker
+let SHOW_HUB=false;      // Nagpur spokes & marker
+let SHOW_NE=false;       // draw Seven Sisters nodes
+let SHOW_HUB_CITY=false; // draw Guwahati hub marker
 function ensureRoadLayers(){
   const net=networkGeoJSON(SHOW_HUB);
   if(!map.getSource("routes")) map.addSource("routes",{type:"geojson",data:net});
@@ -205,26 +224,43 @@ WH_IMG.src=`${WAREHOUSE_ICON_SRC}?v=${Date.now()}`;
 
 const WH_BASE=26, WH_MIN=16, WH_MAX=34;
 const sizeByZoom=z=>Math.max(WH_MIN,Math.min(WH_MAX, WH_BASE*(0.9+(z-5)*0.18)));
+function drawLabelBox(text, p, z){
+  const S=sizeByZoom(z);
+  const label=text, pad=6, h=16, w=ctx.measureText(label).width+pad*2, py=p.y+S/2+12;
+  ctx.fillStyle="rgba(10,10,12,.78)"; ctx.fillRect(p.x-w/2,py-h/2,w,h);
+  ctx.fillStyle="#e8eef2"; ctx.textBaseline="middle"; ctx.fillText(label,p.x-w/2+pad,py);
+}
 function drawWarehouses(){
   if(!ctx) return; const z=map.getZoom();
   ctx.font="bold 11px system-ui, Segoe UI, Roboto, sans-serif";
 
-  // Always draw the five warehouses
+  // Always draw base five warehouses
   for(const id of Object.keys(CITY)){
     const c=CITY[id], p=map.project({lng:c.lon,lat:c.lat}), S=sizeByZoom(z);
     if(WH_READY) ctx.drawImage(WH_IMG, p.x-S/2, p.y-S/2, S, S);
-    const label=c.name, pad=6, h=16, w=ctx.measureText(label).width+pad*2, py=p.y+S/2+12;
-    ctx.fillStyle="rgba(10,10,12,.78)"; ctx.fillRect(p.x-w/2,py-h/2,w,h);
-    ctx.fillStyle="#e8eef2"; ctx.textBaseline="middle"; ctx.fillText(label,p.x-w/2+pad,py);
+    drawLabelBox(c.name, p, z);
   }
 
-  // Draw the hub marker ONLY in Hub mode
+  // Draw the Nagpur hub marker ONLY in Hub mode
   if(SHOW_HUB){
     const c=HUB[HUB_ID]; const p=map.project({lng:c.lon,lat:c.lat}); const S=sizeByZoom(z);
     if(WH_READY) ctx.drawImage(WH_IMG, p.x-S/2, p.y-S/2, S, S);
-    const label=c.name, pad=6, h=16, w=ctx.measureText(label).width+pad*2, py=p.y+S/2+12;
-    ctx.fillStyle="rgba(10,10,12,.78)"; ctx.fillRect(p.x-w/2,py-h/2,w,h);
-    ctx.fillStyle="#e8eef2"; ctx.textBaseline="middle"; ctx.fillText(label,p.x-w/2+pad,py);
+    drawLabelBox(c.name, p, z);
+  }
+
+  // NEW: Seven Sisters nodes in City mode
+  if(SHOW_NE){
+    for(const id of Object.keys(NE7)){
+      const c=NE7[id], p=map.project({lng:c.lon,lat:c.lat}), S=sizeByZoom(z);
+      if(WH_READY) ctx.drawImage(WH_IMG, p.x-S/2, p.y-S/2, S, S);
+      drawLabelBox(c.name, p, z);
+    }
+  }
+  // NEW: Guwahati hub marker in City mode
+  if(SHOW_HUB_CITY){
+    const c=HUB_CITY.H_GUW; const p=map.project({lng:c.lon,lat:c.lat}); const S=sizeByZoom(z);
+    if(WH_READY) ctx.drawImage(WH_IMG, p.x-S/2, p.y-S/2, S, S);
+    drawLabelBox(c.name, p, z);
   }
 }
 
@@ -235,6 +271,8 @@ const SPEED_MULTIPLIER=8.6, MIN_GAP_PX=50, CROSS_GAP_PX=34, LANES_PER_ROUTE=3, L
 function defaultPathIDs(o,d){
   const k1=keyFor(o,d), k2=keyFor(d,o);
   if(RP[k1]||RP[k2]) return [o,d];
+  // If either endpoint is a hub or NE anchor, prefer direct straight line
+  if(getAnchor(o) && getAnchor(d)) return [o,d];
   return (o!=="WH4"&&d!=="WH4") ? [o,"WH4",d] : [o,d];
 }
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){ h=((h<<5)-h)+s.charCodeAt(i); h|=0; } return Math.abs(h); }
@@ -370,10 +408,11 @@ const ChatUI = (() => {
     const cmd = raw.toLowerCase();
     if(onCommand){
       if(cmd === 'disrupt' || cmd === 'correct' || cmd === 'normal' ||
-         cmd === 'hub' || cmd === 'add hub' || cmd === 'hub addition' || cmd === 'nagpur hub'){
+         cmd === 'hub' || cmd === 'add hub' || cmd === 'hub addition' || cmd === 'nagpur hub' ||
+         cmd === 'city' || cmd === 'city addition'){
         onCommand(cmd);
       } else {
-        pushBubble('Valid commands: Disrupt, Correct, Normal, Hub Addition.', 'system');
+        pushBubble('Valid commands: Disrupt, Correct, Normal, Hub Addition, City Addition.', 'system');
       }
     }
   }
@@ -406,83 +445,60 @@ const ChatUI = (() => {
 /* ---- ROBUST Narrator: pass #2 waits for real completion of pass #1 ---- */
 const Narrator = (() => {
   let muted = false;
-
-  // Run token to guard against overlap/re-entrancy
   let currentRun = 0;
-
-  // Idle gap between passes (ms). You set this to 700; keep configurable.
   const PASS_IDLE_GAP_MS = 700;
 
-  function newRunToken(){
-    currentRun += 1;
-    return currentRun;
-  }
-
-  function clearTTS(){
-    try{ synth?.cancel?.(); }catch(e){}
-  }
-
+  function newRunToken(){ currentRun += 1; return currentRun; }
+  function clearTTS(){ try{ synth?.cancel?.(); }catch(e){} }
   function wait(ms){ return new Promise(res=>setTimeout(res, ms)); }
 
   function speakOnceAsync(text, rate=0.95, runToken){
     return new Promise((resolve) => {
-      if(muted || !synth || !text || runToken!==currentRun){
-        // Resolve immediately if muted or superseded
-        return resolve();
-      }
+      if(muted || !synth || !text || runToken!==currentRun){ return resolve(); }
       const u = new SpeechSynthesisUtterance(String(text));
       if(VOICE) u.voice = VOICE;
       u.rate = rate; u.pitch = 1.0; u.volume = 1.0;
       u.onend = () => resolve();
-      u.onerror = () => resolve(); // resolve on error to avoid stalls
+      u.onerror = () => resolve();
       synth.speak(u);
     });
   }
-
-  // One pass: speak each line in order, with gap between lines.
   async function queueOnce(lines, gap=950, rate=0.95, runToken, preClear=false){
-    if(preClear){
-      clearTTS();  // cancel any prior narration
-    }
+    if(preClear){ clearTTS(); }
     for(const line of lines){
-      if(runToken!==currentRun) return;       // superseded
+      if(runToken!==currentRun) return;
       ChatUI.appendSystem(line);
       await speakOnceAsync(line, rate, runToken);
-      if(runToken!==currentRun) return;       // superseded
+      if(runToken!==currentRun) return;
       if(gap>0) await wait(gap);
     }
   }
 
-  // Public API
   return {
-    // Repeat lines twice, with real completion of pass #1, then idle gap, then pass #2
     sayLinesTwice: async (lines, gap=950, rate=0.95)=>{
-      const run = newRunToken();      // start a fresh narration run
-      clearTTS();                     // ensure clean start for pass #1
-      await queueOnce(lines, gap, rate, run, /*preClear*/false);
-      if(run!==currentRun) return;    // aborted mid-pass by new run
-      await wait(PASS_IDLE_GAP_MS);   // idle gap between passes
-      if(run!==currentRun) return;    // aborted during idle
-      await queueOnce(lines, gap, rate, run, /*preClear*/false);
+      const run = newRunToken();
+      clearTTS();
+      await queueOnce(lines, gap, rate, run, false);
+      if(run!==currentRun) return;
+      await wait(PASS_IDLE_GAP_MS);
+      if(run!==currentRun) return;
+      await queueOnce(lines, gap, rate, run, false);
     },
     sayOnce: (line)=>{
       const run = newRunToken();
       clearTTS();
       ChatUI.appendSystem(line);
-      // fire and forget
       speakOnceAsync(line, 0.95, run);
     },
-    clear: ()=>{
-      // Abort any ongoing narration by advancing the run token and cancelling TTS
-      newRunToken();
-      clearTTS();
-    },
+    clear: ()=>{ newRunToken(); clearTTS(); },
     setMuted: (m)=>{ muted = !!m; if(muted){ newRunToken(); clearTTS(); } }
   };
 })();
 
 /* -------------------- stats table helpers -------------------- */
 const baseStats={}; let beforeStats=null; let afterStats=null; let hubStats=null;
+let cityBaseStats=null; let cityAfterStats=null;
+
 function computeStatsFromScenario(scn){
   const inC={}, outC={};
   (scn.trucks||[]).forEach(t=>{ outC[t.origin]=(outC[t.origin]||0)+1; inC[t.destination]=(inC[t.destination]||0)+1; });
@@ -492,17 +508,19 @@ function computeStatsFromScenario(scn){
   });
   return stats;
 }
-function renderStatsTable(pred){
+function renderStatsTable(pred, ids=null){
   const tbody=document.querySelector("#statsTable tbody"); if(!tbody) return; tbody.innerHTML="";
-  for(const id of Object.keys(CITY)){
+  const list = ids && ids.length ? ids : Object.keys(CITY);
+  for(const id of list){
+    const label = getAnchor(id)?.name || (CITY[id]?.name) || id;
     const s=pred[id]||{inv:"-",in:0,out:0};
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${CITY[id].name}</td><td>${s.inv}</td><td class="pos">+${s.in}</td><td class="neg">-${s.out}</td>`;
+    tr.innerHTML=`<td>${label}</td><td>${s.inv}</td><td class="pos">+${s.in}</td><td class="neg">-${s.out}</td>`;
     tbody.appendChild(tr);
   }
 }
 
-/* -------------------- metrics for Hub demo -------------------- */
+/* -------------------- metrics (kept) -------------------- */
 function haversineKm(a,b){
   const toRad=v=>v*Math.PI/180, R=6371;
   const dLat=toRad(b[0]-a[0]), dLon=toRad(b[1]-a[1]);
@@ -515,9 +533,7 @@ function pathDistanceKm(ids){
   let d=0; for(let i=0;i<pts.length-1;i++) d+=haversineKm([pts[i][0],pts[i][1]],[pts[i+1][0],pts[i+1][1]]);
   return d;
 }
-function truckDistanceKm(tr){
-  return pathDistanceKm([tr.origin, tr.destination]);
-}
+function truckDistanceKm(tr){ return pathDistanceKm([tr.origin, tr.destination]); }
 function truckDriveMin(tr, scn){
   const speed = tr.speed_kmph || scn?.policies?.default_speed_kmph || DEFAULT_SPEED_KMPH;
   const km = truckDistanceKm(tr);
@@ -540,23 +556,16 @@ function summarizeScenario(scn){
   const truckKm = (scn.trucks||[]).reduce((s,t)=>s+truckDistanceKm(t),0);
 
   let samples=[];
-  if(useHub || (scn.trucks||[]).some(t=>t.origin===HUB_ID||t.destination===HUB_ID)){
+  if(useHub || (scn.trucks||[]).some(t=>t.origin.startsWith("H_")||t.destination.startsWith("H_"))){
     const byOD = new Map();
     for(const t of (scn.trucks||[])){
       const od=t.od||`${t.origin}-${t.destination}`;
-      if(!byOD.has(od)) byOD.set(od,{out:[],ino:[]});
-      if(t.destination===HUB_ID) byOD.get(od).out.push(t);
-      else if(t.origin===HUB_ID) byOD.get(od).ino.push(t);
-      else { samples.push({min:truckDriveMin(t, scn), w:t.units||1}); }
+      if(!byOD.has(od)) byOD.set(od,{legs:[t]});
+      else byOD.get(od).legs.push(t);
     }
-    for(const [od,legs] of byOD){
-      const n=Math.min(legs.out.length, legs.ino.length);
-      for(let i=0;i<n;i++){
-        const a=legs.out[i], b=legs.ino[i];
-        const units=Math.min(a.units||1, b.units||1);
-        const min=truckDriveMin(a, scn)+truckDriveMin(b, scn)+dwell+batch;
-        samples.push({min, w:units});
-      }
+    // Assume hub legs aggregate; treat each leg as separate unless paired.
+    for(const t of (scn.trucks||[])){
+      samples.push({min:truckDriveMin(t, scn)+dwell+batch, w:t.units||1});
     }
   } else {
     for(const t of (scn.trucks||[])) samples.push({min:truckDriveMin(t, scn), w:t.units||1});
@@ -569,11 +578,10 @@ function summarizeScenario(scn){
 }
 function minRound(x){ return Math.round(x); }
 
-/* ----- human-friendly formatters for narration ----- */
 const fmtInt = (n)=>Math.round(n).toLocaleString("en-US");
 const roundKm = (km)=>Math.round(km/10)*10;
 const fmtKm = (km)=>`${fmtInt(roundKm(km))} kilometers`;
-const toHours1 = (min)=> (Math.round((min/60)*10)/10); // 1 decimal
+const toHours1 = (min)=> (Math.round((min/60)*10)/10);
 const fmtHours = (min)=>`${toHours1(min)} hours`;
 function pctDeltaHuman(base, now){
   if(base===0) return {dir:"changed", pct:0};
@@ -587,7 +595,7 @@ function ppDeltaHuman(basePct, nowPct){
   return {dir, pp:Math.abs(d)};
 }
 
-/* -------------------- pause / reroute control -------------------- */
+/* -------------------- pause / reroute control (kept) -------------------- */
 function odMatch(ids,o,d){ const a=ids[0], b=ids[ids.length-1]; return (a===o&&b===d)||(a===d&&b===o); }
 function setTruckPath(T,latlon,toMid=false){ if(!latlon||latlon.length<2) return; T.latlon=latlon; T.seg=0; T.dir=1; T.t=toMid?0.5:0.0; }
 function pauseAllOnRoute(step){
@@ -621,7 +629,7 @@ function reroutePaused(step){
   return released;
 }
 
-/* -------------------- state machine -------------------- */
+/* -------------------- state machine (kept) -------------------- */
 let mode="normal"; let currentStepIdx=-1;
 function setAlert(ids){ setSourceFeatures("alert",[featureForRoute(ids)]); }
 function clearAlert(){ setSourceFeatures("alert",[]); }
@@ -633,12 +641,13 @@ function activateTrucksFromScenario(scn){
   (scn.trucks||[]).forEach((t,i)=>spawnTruck(t,i));
 }
 
+/* -------------------- Disrupt/Correct/Normal (kept) -------------------- */
 function startDisrupt(){
   if(mode==="disrupt"){
     Narrator.sayLinesTwice(["A disruption is already active. Please click the Correct button to proceed."],900,0.92);
     return;
   }
-  SHOW_HUB=false; refreshRoadNetwork(); // hide hub spokes
+  SHOW_HUB=false; SHOW_NE=false; SHOW_HUB_CITY=false; refreshRoadNetwork();
   currentStepIdx = (currentStepIdx + 1) % STEPS.length;
   const step=STEPS[currentStepIdx];
   clearFix(); setAlert(step.route);
@@ -658,7 +667,7 @@ function applyCorrect(){
     Narrator.sayLinesTwice(["No active disruption. Click Disrupt first."],800,0.95);
     return;
   }
-  SHOW_HUB=false; refreshRoadNetwork(); // hide hub spokes
+  SHOW_HUB=false; SHOW_NE=false; SHOW_HUB_CITY=false; refreshRoadNetwork();
   const step=STEPS[currentStepIdx];
   clearAlert(); setFix(step.reroute);
   reroutePaused(step);
@@ -667,7 +676,7 @@ function applyCorrect(){
   mode="fixed";
 }
 function backToNormal(){
-  SHOW_HUB=false; refreshRoadNetwork(); // hide hub spokes
+  SHOW_HUB=false; SHOW_NE=false; SHOW_HUB_CITY=false; refreshRoadNetwork();
   Narrator.clear();
   clearAlert(); clearFix();
   activateTrucksFromScenario(SCN_BEFORE);
@@ -688,7 +697,7 @@ function applyDeltaToStats(base, deltaCounts, invShiftPerTruck=10){
   return out;
 }
 
-/* -------------------- Hub Addition flow (with human narration) -------------------- */
+/* -------------------- Hub Addition flow (kept) -------------------- */
 function hubAddition(){
   if(!SCN_HUB){
     Narrator.sayLinesTwice(["Hub scenario not found in scenario_after.json (key 'hub')."], 800, 0.95);
@@ -696,14 +705,12 @@ function hubAddition(){
   }
   Narrator.clear(); clearAlert(); clearFix();
 
-  // show hub spokes & marker
+  SHOW_NE=false; SHOW_HUB_CITY=false;
   SHOW_HUB=true; refreshRoadNetwork();
 
-  // swap trucks to hub scenario and update dashboard
   activateTrucksFromScenario(SCN_HUB);
   renderStatsTable(hubStats||beforeStats);
 
-  // compute deltas
   const baseS = summarizeScenario(SCN_BEFORE);
   const hubS  = summarizeScenario(SCN_HUB);
 
@@ -733,12 +740,59 @@ function hubAddition(){
   mode="hub";
 }
 
-/* -------------------- camera helper (kept, unused) -------------------- */
-function fitToRoute(idsOrPairs){
-  const pts = Array.isArray(idsOrPairs[0]) ? expandIDsToLatLon(idsOrPairs.flat()) : expandIDsToLatLon(idsOrPairs);
+/* -------------------- NEW: City Addition flow (Seven Sisters + Guwahati) -------------------- */
+async function cityAddition(){
+  if(!SCN_CITY_BASE || !SCN_CITY_AFTER){
+    Narrator.sayLinesTwice(["City Addition data not found. Please check 'city.baseline' in scenario_before.json and 'city.proposal' in scenario_after.json."], 800, 0.95);
+    return;
+  }
+  Narrator.clear(); clearAlert(); clearFix();
+
+  // Stage 1: Baseline (no Guwahati hub)
+  SHOW_HUB=false; SHOW_HUB_CITY=false;
+  SHOW_NE=true; refreshRoadNetwork();
+  activateTrucksFromScenario(SCN_CITY_BASE);
+
+  // Render dashboard rows for NE7 (only)
+  const NE_IDS = Object.keys(NE7);
+  renderStatsTable(cityBaseStats, NE_IDS);
+
+  const baseS = summarizeScenario(SCN_CITY_BASE);
+  const baselineLines = [
+    "Opening service to the Seven Sisters (Arunachal Pradesh, Assam, Manipur, Meghalaya, Mizoram, Nagaland, Tripura).",
+    "Baseline: Serving from the existing network without a Guwahati hub.",
+    `Baseline movements: ${fmtInt(baseS.movements)}; baseline distance: ${fmtKm(baseS.truckKm)}.`
+  ];
+  await Narrator.sayLinesTwice(baselineLines, 900, 0.92);
+
+  // Small pause, then Stage 2: Proposal with Guwahati hub
+  await new Promise(r=>setTimeout(r, 900));
+
+  SHOW_HUB=false; SHOW_NE=true; SHOW_HUB_CITY=true; // show Guwahati hub marker
+  activateTrucksFromScenario(SCN_CITY_AFTER);
+  renderStatsTable(cityAfterStats, NE_IDS);
+
+  const afterS = summarizeScenario(SCN_CITY_AFTER);
+  const mov = pctDeltaHuman(baseS.movements, afterS.movements);
+  const km  = pctDeltaHuman(baseS.truckKm, afterS.truckKm);
+
+  const lines=[
+    "Proposal: Add Guwahati hub and reassign the Seven Sisters to it.",
+    `Truck movements ${mov.dir} by ${mov.pct}% — from ${fmtInt(baseS.movements)} to ${fmtInt(afterS.movements)}.`,
+    `Total truck-km ${km.dir} by ${km.pct}% — from ${fmtKm(baseS.truckKm)} to ${fmtKm(afterS.truckKm)}.`,
+    "Result: Fewer movements and shorter corridors for NE India with Guwahati as the regional hub."
+  ];
+  Narrator.sayLinesTwice(lines, 900, 0.92);
+
+  mode="city";
+}
+
+/* -------------------- camera helper -------------------- */
+function fitToBoundsOfAnchors(ids){
   const b=new maplibregl.LngLatBounds();
-  pts.forEach(p=>b.extend([p[1],p[0]]));
-  map.fitBounds(b,{padding:{top:60,left:60,right:320,bottom:60},duration:700,maxZoom:6.9});
+  ids.forEach(id=>{ const a=getAnchor(id); if(a) b.extend([a.lon,a.lat]); });
+  if(b.isEmpty()) return;
+  map.fitBounds(b,{padding:{top:60,left:60,right:320,bottom:60},duration:800,maxZoom:6.8});
 }
 
 /* -------------------- boot -------------------- */
@@ -768,12 +822,21 @@ const mapReady=new Promise(res=>map.on("load",res));
     btnHub.style.marginLeft="8px";
     ui.appendChild(btnHub);
   }
+  // NEW: City Addition button
+  let btnCity=document.getElementById("btnCity");
+  if(!btnCity){
+    btnCity=document.createElement("button");
+    btnCity.id="btnCity"; btnCity.textContent="City Addition";
+    btnCity.style.marginLeft="8px";
+    ui.appendChild(btnCity);
+  }
 
   // wire buttons
   if(btnBefore) btnBefore.onclick=()=>startDisrupt();
   if(btnAfter)  btnAfter.onclick =()=>applyCorrect();
   btnNormal.onclick=()=>backToNormal();
   btnHub.onclick=()=>hubAddition();
+  btnCity.onclick=()=>cityAddition();
 
   // wire chat commands
   ChatUI.onCommand((cmd)=>{
@@ -781,31 +844,39 @@ const mapReady=new Promise(res=>map.on("load",res));
     else if(cmd==='correct') applyCorrect();
     else if(cmd==='normal') backToNormal();
     else if(cmd==='hub' || cmd==='add hub' || cmd==='hub addition' || cmd==='nagpur hub') hubAddition();
+    else if(cmd==='city' || cmd==='city addition') cityAddition();
   });
 
   // load scenarios
-  SCN_BEFORE = await fetchOrDefault("scenario_before.json", DEFAULT_BEFORE);
-  const afterRaw = await fetchOrDefault("scenario_after.json", DEFAULT_BEFORE);
+  const beforeRaw = await fetchOrDefault("scenario_before.json", DEFAULT_BEFORE);
+  SCN_BEFORE = beforeRaw; // standard baseline
+  const afterRaw  = await fetchOrDefault("scenario_after.json",  DEFAULT_BEFORE);
   SCN_AFTER = { warehouses: afterRaw.warehouses, trucks: afterRaw.trucks, policies: afterRaw.policies||{} };
   SCN_HUB   = afterRaw.hub ? { warehouses: afterRaw.hub.warehouses, trucks: afterRaw.hub.trucks, policies: afterRaw.hub.policies } : null;
+
+  // NEW: City scenarios
+  SCN_CITY_BASE  = beforeRaw.city?.baseline || null;
+  SCN_CITY_AFTER = afterRaw.city?.proposal || null;
 
   // compute stats snapshots
   beforeStats = computeStatsFromScenario(SCN_BEFORE);
   afterStats  = computeStatsFromScenario(SCN_AFTER);
   hubStats    = SCN_HUB ? computeStatsFromScenario(SCN_HUB) : null;
+  cityBaseStats  = SCN_CITY_BASE  ? computeStatsFromScenario(SCN_CITY_BASE)  : null;
+  cityAfterStats = SCN_CITY_AFTER ? computeStatsFromScenario(SCN_CITY_AFTER) : null;
   Object.assign(baseStats, beforeStats);
 
   // spawn trucks from BEFORE scenario
   activateTrucksFromScenario(SCN_BEFORE);
 
-  // initial camera — symmetric padding (no chat-dependent offset)
+  // initial camera — include base five; City mode fits later
   const b=new maplibregl.LngLatBounds(); Object.values(CITY).forEach(c=>b.extend([c.lon,c.lat]));
   map.fitBounds(b,{padding:{top:60,left:60,right:320,bottom:60},duration:800,maxZoom:6.8});
 
   // start clean
   renderStatsTable(beforeStats);
   Narrator.sayLinesTwice([
-    "Type Disrupt, Correct, Normal — or Hub Addition — to drive the simulation.",
+    "Type Disrupt, Correct, Normal — or Hub Addition — or City Addition — to drive the simulation.",
     "🔊 Toggle narration with the Mute button or press Ctrl+M."
   ]);
 })();
