@@ -438,7 +438,7 @@ const Narrator = (() => {
     clearTTS();
     const dur = measure(lines, rate, gap);
     queue(lines, gap, rate);
-    ttsTimers.push(setTimeout(()=>queue(lines, gap, rate), dur+600));
+    ttsTimers.push(setTimeout(()=>queue(lines, gap, rate), dur+700));
   }
 
   return {
@@ -785,3 +785,4 @@ async function fetchOrDefault(file, fallback){
 }
 function tick(){ const now=performance.now(); const dt=Math.min(0.05,(now-__lastTS)/1000); __lastTS=now; __dt=dt; drawFrame(); requestAnimationFrame(tick); }
 requestAnimationFrame(tick);
+
