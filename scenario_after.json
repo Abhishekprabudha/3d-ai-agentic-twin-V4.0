@@ -76,5 +76,40 @@
     "commentary": {
       "static": "Nagpur hub mode: fewer movements via consolidation; ETA increases slightly due to hub dwell/batching."
     }
+  },
+
+  "city": {
+    "proposal": {
+      "policies": {
+        "use_hub": true,
+        "hubs": ["H_GUW"],
+        "hub_dwell_min": 45,
+        "consolidation_window_min": 25,
+        "capacity_units": 10,
+        "default_speed_kmph": 55
+      },
+      "warehouses": [
+        { "id": "NE_AP", "location": "Itanagar (Arunachal Pradesh)", "inventory": 120 },
+        { "id": "NE_AS", "location": "Guwahati (Assam)",            "inventory": 160 },
+        { "id": "NE_MN", "location": "Imphal (Manipur)",             "inventory": 110 },
+        { "id": "NE_ML", "location": "Shillong (Meghalaya)",         "inventory": 115 },
+        { "id": "NE_MZ", "location": "Aizawl (Mizoram)",             "inventory": 100 },
+        { "id": "NE_NL", "location": "Kohima (Nagaland)",            "inventory": 105 },
+        { "id": "NE_TR", "location": "Agartala (Tripura)",           "inventory": 130 },
+        { "id": "H_GUW", "location": "Guwahati Hub",                 "inventory": 80, "type": "hub" }
+      ],
+      "trucks": [
+        { "id": "P1", "origin": "H_GUW", "destination": "NE_AP", "units": 8, "speed_kmph": 55, "od": "GUW-AP" },
+        { "id": "P2", "origin": "H_GUW", "destination": "NE_AS", "units": 8, "speed_kmph": 55, "od": "GUW-AS" },
+        { "id": "P3", "origin": "H_GUW", "destination": "NE_MN", "units": 8, "speed_kmph": 55, "od": "GUW-MN" },
+        { "id": "P4", "origin": "H_GUW", "destination": "NE_ML", "units": 8, "speed_kmph": 55, "od": "GUW-ML" },
+        { "id": "P5", "origin": "H_GUW", "destination": "NE_MZ", "units": 8, "speed_kmph": 55, "od": "GUW-MZ" },
+        { "id": "P6", "origin": "H_GUW", "destination": "NE_NL", "units": 8, "speed_kmph": 55, "od": "GUW-NL" },
+        { "id": "P7", "origin": "H_GUW", "destination": "NE_TR", "units": 8, "speed_kmph": 55, "od": "GUW-TR" }
+      ],
+      "commentary": {
+        "static": "City Addition (proposal): Add Guwahati hub and reassign NE states to it to save movements and truck-km."
+      }
+    }
   }
 }
