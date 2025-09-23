@@ -1,10 +1,11 @@
 /* =========================================================================
-   Agentic Twin — Disrupt → Correct → Normal + Hub Addition + City Addition (v6.4)
-   - NE roads are hidden until City Addition is initiated
-   - Curved white routes for Seven Sisters (baseline: WH5→NE_*, proposal: H_GUW→NE_* + WH5↔H_GUW)
-   - Seven Sisters icons only (no labels)
-   - City Addition narration: baseline once, then proposal deltas
-   - Guwahati hub appears only when proposal begins
+   Agentic Twin — Disrupt → Correct → Normal + Hub Addition + City Addition (v6.5)
+   Enhancements:
+   1) City Addition = two-stage narration (Baseline → Proposal) with the
+      Guwahati hub icon + movements revealed only at the proposal stage.
+   2) During City Addition (both baseline and proposal), the rest of India
+      continues moving as-is (base network trucks kept running), and in the
+      proposal stage we also keep Kolkata ↔ Guwahati movements visible.
    ======================================================================= */
 
 /* -------------------- tiny debug pill -------------------- */
@@ -236,14 +237,14 @@ function ensureRoadLayers(){
       layout:{"line-cap":"round","line-join":"round"}});
   }
 
-  if(!map.getSource("alert")) map.addSource("alert",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
+  if(!map.getSource("alert")) map.addSource("alert",{type:"geojson",data:{type:"FeatureCollection",features:[]}})
   if(!map.getLayer("alert-red")){
     map.addLayer({id:"alert-red",type:"line",source:"alert",
       paint:{"line-color":"#ff6b6b","line-opacity":0.98,"line-width":4.6},
       layout:{"line-cap":"round","line-join":"round"}});
   }
 
-  if(!map.getSource("fix")) map.addSource("fix",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
+  if(!map.getSource("fix")) map.addSource("fix",{type:"geojson",data:{type:"FeatureCollection",features:[]}})
   if(!map.getLayer("fix-green")){
     map.addLayer({id:"fix-green",type:"line",source:"fix",
       paint:{"line-color":"#00d08a","line-opacity":0.98,"line-width":5.8},
@@ -680,6 +681,28 @@ function activateTrucksFromScenario(scn){
   (scn.trucks||[]).forEach((t,i)=>spawnTruck(t,i));
 }
 
+/* -------- NEW: merge helpers so other corridors keep moving during City Addition -------- */
+function prefixTruckIds(trucksList, prefix){
+  return (trucksList||[]).map((t, i)=>({
+    ...t,
+    id: `${prefix}${t.id || i}`
+  }));
+}
+function buildCombinedScenario(baseScn, overlayScn, overlayPrefix){
+  // Keep base warehouses/policies as-is; just concatenate trucks with namespacing
+  const base = baseScn || {warehouses:[], trucks:[], policies:{}};
+  const over = overlayScn || {warehouses:[], trucks:[], policies:{}};
+  const trucksMerged = [
+    ...(base.trucks||[]),
+    ...prefixTruckIds(over.trucks||[], overlayPrefix||"NE_")
+  ];
+  return {
+    warehouses: base.warehouses,          // stocks/labels UI is handled separately for NE
+    trucks: trucksMerged,
+    policies: base.policies || {}
+  };
+}
+
 /* -------------------- Disrupt/Correct/Normal -------------------- */
 function startDisrupt(){
   if(mode==="disrupt"){
@@ -758,23 +781,25 @@ async function cityAddition(){
   }
   Narrator.clear(); clearAlert(); clearFix();
 
-  // Stage 1: Baseline (Kolkata → NE, no Guwahati hub)
+  // Stage 1: Baseline (Kolkata → NE, no Guwahati hub) — KEEP other corridors moving
   SHOW_HUB=false; SHOW_HUB_CITY=false;
-  SHOW_NE=true; refreshRoadNetwork();               // adds WH5→NE curved roads
-  activateTrucksFromScenario(SCN_CITY_BASE);
+  SHOW_NE=true; refreshRoadNetwork();               // adds WH5→NE curved roads (no hub)
+  // Merge: base trucks + NE baseline trucks (ID-namespaced to avoid clashes)
+  const COMBINED_CITY_BASE = buildCombinedScenario(SCN_BEFORE, SCN_CITY_BASE, "NEB_");
+  activateTrucksFromScenario(COMBINED_CITY_BASE);
 
   const NE_IDS = Object.keys(NE7);
   renderStatsTable(cityBaseStats, NE_IDS);
 
-  const baseS = summarizeScenario(SCN_CITY_BASE);
+  const baseS = summarizeScenario(SCN_CITY_BASE);   // KPI lines focus on NE addition deltas
   const baselineLines = [
     "Opening service to the Seven Sisters (Arunachal Pradesh, Assam, Manipur, Meghalaya, Mizoram, Nagaland, Tripura).",
-    "Baseline: Serving from the existing network without a Guwahati hub.",
-    `Baseline movements: ${fmtInt(baseS.movements)}.`,
-    `Baseline distance: ${fmtKm(baseS.truckKm)}.`,
-    `Average O→D time: ${fmtHours(baseS.meanEta)}.`,
-    `90th percentile ETA: ${fmtHours(baseS.p90Eta)}.`,
-    `Average truck utilization: ${baseS.utilization} percent.`
+    "Baseline: Serving from the existing network without a Guwahati hub. Other corridors continue as-is.",
+    `Baseline movements (NE flows considered): ${fmtInt(baseS.movements)}.`,
+    `Baseline distance (NE flows): ${fmtKm(baseS.truckKm)}.`,
+    `Average O→D time (NE flows): ${fmtHours(baseS.meanEta)}.`,
+    `90th percentile ETA (NE flows): ${fmtHours(baseS.p90Eta)}.`,
+    `Average truck utilization (NE flows): ${baseS.utilization} percent.`
   ];
   await Narrator.sayLinesTwice(baselineLines, 900, 0.92);
 
@@ -782,7 +807,23 @@ async function cityAddition(){
   await new Promise(r=>setTimeout(r, 900));
   SHOW_HUB=false; SHOW_NE=true; SHOW_HUB_CITY=true; // reveal H_GUW + swap routes
   refreshRoadNetwork();
-  activateTrucksFromScenario(SCN_CITY_AFTER);
+
+  // Merge: base trucks + NE proposal trucks (ID-namespaced). Ensures Kolkata ↔ Guwahati flows + rest of India continue.
+  const COMBINED_CITY_PROPOSAL = buildCombinedScenario(SCN_BEFORE, SCN_CITY_AFTER, "NEP_");
+
+  // If your city.proposal didn't include WH5↔H_GUW trucks, add a minimal fallback so the movement is visible.
+  const hasWH5GUW = (SCN_CITY_AFTER.trucks||[]).some(t=>
+    (t.origin==="WH5" && (t.destination==="H_GUW"||t.destination==="NE_AS")) ||
+    (t.destination==="WH5" && (t.origin==="H_GUW"||t.origin==="NE_AS"))
+  );
+  if(!hasWH5GUW){
+    (COMBINED_CITY_PROPOSAL.trucks).push(
+      {id:"NEP_FALLBACK_1", origin:"WH5", destination:"H_GUW", units:3, speed_kmph:55, status:"On-Time"},
+      {id:"NEP_FALLBACK_2", origin:"H_GUW", destination:"WH5", units:3, speed_kmph:55, status:"On-Time"}
+    );
+  }
+
+  activateTrucksFromScenario(COMBINED_CITY_PROPOSAL);
   renderStatsTable(cityAfterStats, NE_IDS);
 
   const afterS = summarizeScenario(SCN_CITY_AFTER);
@@ -794,11 +835,12 @@ async function cityAddition(){
 
   const proposalLines = [
     "Proposal: Add Guwahati hub and reassign the Seven Sisters to it (fan-out from Guwahati).",
-    `Truck movements ${mov.dir} by ${mov.pct}% — from ${fmtInt(baseS.movements)} to ${fmtInt(afterS.movements)}.`,
-    `Total truck-km ${km.dir} by ${km.pct}% — from ${fmtKm(baseS.truckKm)} to ${fmtKm(afterS.truckKm)}.`,
-    `Average O→D time ${mean.dir} by ${toHours1(Math.abs(afterS.meanEta-baseS.meanEta))} hours — from ${fmtHours(baseS.meanEta)} to ${fmtHours(afterS.meanEta)}.`,
-    `P90 ETA ${p90.dir} by ${toHours1(Math.abs(afterS.p90Eta-baseS.p90Eta))} hours — from ${fmtHours(baseS.p90Eta)} to ${fmtHours(afterS.p90Eta)}.`,
-    `Average truck utilization ${util.dir} by ${Math.abs(util.pp)} pp — from ${baseS.utilization}% to ${afterS.utilization}%.`
+    "Other corridors continue concurrently. Kolkata ↔ Guwahati movements are active.",
+    `Truck movements (NE flows) ${mov.dir} by ${mov.pct}% — from ${fmtInt(baseS.movements)} to ${fmtInt(afterS.movements)}.`,
+    `Total truck-km (NE flows) ${km.dir} by ${km.pct}% — from ${fmtKm(baseS.truckKm)} to ${fmtKm(afterS.truckKm)}.`,
+    `Average O→D time (NE flows) ${mean.dir} by ${toHours1(Math.abs(afterS.meanEta-baseS.meanEta))} hours — from ${fmtHours(baseS.meanEta)} to ${fmtHours(afterS.meanEta)}.`,
+    `P90 ETA (NE flows) ${p90.dir} by ${toHours1(Math.abs(afterS.p90Eta-baseS.p90Eta))} hours — from ${fmtHours(baseS.p90Eta)} to ${fmtHours(afterS.p90Eta)}.`,
+    `Average truck utilization (NE flows) ${util.dir} by ${Math.abs(util.pp)} pp — from ${baseS.utilization}% to ${afterS.utilization}%.`
   ];
   await Narrator.sayLinesTwice(proposalLines, 900, 0.92);
 
