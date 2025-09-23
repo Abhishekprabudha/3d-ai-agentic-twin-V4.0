@@ -416,7 +416,7 @@ function drawFrame(){
   drawWarehouses();
 }
 
-/* -------------------- Narration + Chat (ROBUST REPEAT) -------------------- */
+/* -------------------- Narration + Chat (city addition REPEAT) -------------------- */
 const synth=window.speechSynthesis; let VOICE=null;
 function pickVoice(){
   const vs=synth?.getVoices?.()||[];
@@ -533,6 +533,12 @@ const Narrator = (() => {
       if(run!==currentRun) return;
       await queueOnce(lines, gap, rate, run, false);
     },
+     // inside: const Narrator = (() => { ... return { ... } })();
+sayLinesOnce: async (lines, gap=950, rate=0.95) => {
+  const run = newRunToken();
+  clearTTS();
+  await queueOnce(lines, gap, rate, run, false);
+},
     sayOnce: (line)=>{
       const run = newRunToken();
       clearTTS();
@@ -776,7 +782,7 @@ function hubAddition(){
 /* -------------------- City Addition flow (Seven Sisters + Guwahati) -------------------- */
 async function cityAddition(){
   if(!SCN_CITY_BASE || !SCN_CITY_AFTER){
-    Narrator.sayLinesTwice(["City Addition data not found. Please check 'city.baseline' in scenario_before.json and 'city.proposal' in scenario_after.json."], 800, 0.95);
+    Narrator.sayLinesOnce(["City Addition data not found. Please check 'city.baseline' in scenario_before.json and 'city.proposal' in scenario_after.json."], 800, 0.95);
     return;
   }
   Narrator.clear(); clearAlert(); clearFix();
@@ -801,7 +807,7 @@ async function cityAddition(){
     `90th percentile ETA (NE flows): ${fmtHours(baseS.p90Eta)}.`,
     `Average truck utilization (NE flows): ${baseS.utilization} percent.`
   ];
-  await Narrator.sayLinesTwice(baselineLines, 900, 0.92);
+  await Narrator.sayLinesOnce(baselineLines, 900, 0.92);
 
   // Stage 2: Proposal (Guwahati hub appears now; fan-out switches to H_GUW)
   await new Promise(r=>setTimeout(r, 900));
@@ -842,7 +848,7 @@ async function cityAddition(){
     `P90 ETA (NE flows) ${p90.dir} by ${toHours1(Math.abs(afterS.p90Eta-baseS.p90Eta))} hours — from ${fmtHours(baseS.p90Eta)} to ${fmtHours(afterS.p90Eta)}.`,
     `Average truck utilization (NE flows) ${util.dir} by ${Math.abs(util.pp)} pp — from ${baseS.utilization}% to ${afterS.utilization}%.`
   ];
-  await Narrator.sayLinesTwice(proposalLines, 900, 0.92);
+  await Narrator.sayLinesOnce(proposalLines, 900, 0.92);
 
   mode="city";
 }
@@ -947,3 +953,4 @@ async function fetchOrDefault(file, fallback){
 }
 function tick(){ const now=performance.now(); const dt=Math.min(0.05,(now-__lastTS)/1000); __lastTS=now; __dt=dt; drawFrame(); requestAnimationFrame(tick); }
 requestAnimationFrame(tick);
+
