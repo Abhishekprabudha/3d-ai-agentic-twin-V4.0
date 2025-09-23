@@ -1,8 +1,10 @@
 /* =========================================================================
-   Agentic Twin — Disrupt → Correct → Normal + Hub Addition + City Addition (v6.3)
+   Agentic Twin — Disrupt → Correct → Normal + Hub Addition + City Addition (v6.4)
+   - NE roads are hidden until City Addition is initiated
    - Curved white routes for Seven Sisters (baseline: WH5→NE_*, proposal: H_GUW→NE_* + WH5↔H_GUW)
    - Seven Sisters icons only (no labels)
-   - City Addition narration now includes full baseline + proposal metrics
+   - City Addition narration: baseline once, then proposal deltas
+   - Guwahati hub appears only when proposal begins
    ======================================================================= */
 
 /* -------------------- tiny debug pill -------------------- */
@@ -68,7 +70,7 @@ RP["WH3-H_NAG"]=[[12.9716,77.5946],[14.6,78.6],[16.8,79.3],[19.0,79.4],[21.1458,
 RP["WH4-H_NAG"]=[[17.3850,78.4867],[18.6,78.9],[19.8,79.2],[20.6,79.2],[21.1458,79.0882]];
 RP["WH5-H_NAG"]=[[22.5726,88.3639],[21.7,86.4],[21.2,83.8],[21.2,81.5],[21.1458,79.0882]];
 
-/* ---- NEW: Curved roads for City Addition ---- */
+/* ---- Curved roads for City Addition ---- */
 /* Baseline: WH5 → Seven Sisters (gentle bends for road-like look) */
 RP["WH5-NE_AP"]=[[22.5726,88.3639],[24.5,89.0],[26.0,92.0],[27.0844,93.6053]];
 RP["WH5-NE_AS"]=[[22.5726,88.3639],[24.2,89.6],[25.5,90.8],[26.1445,91.7362]];
@@ -78,7 +80,7 @@ RP["WH5-NE_MZ"]=[[22.5726,88.3639],[23.0,90.0],[23.4,91.3],[23.7271,92.7176]];
 RP["WH5-NE_NL"]=[[22.5726,88.3639],[24.3,89.7],[25.0,92.0],[25.6747,94.1100]];
 RP["WH5-NE_TR"]=[[22.5726,88.3639],[23.2,89.0],[23.5,90.2],[23.8315,91.2868]];
 
-/* Proposal: H_GUW → Seven Sisters (fan-out) + WH5 ↔ H_GUW connector */
+/* Proposal: H_GUW → Seven Sisters (fan-out) + WH5 ↔ H_GUW */
 RP["WH5-H_GUW"]=[[22.5726,88.3639],[24.0,89.8],[25.2,90.8],[26.1445,91.7362]];
 RP["H_GUW-NE_AP"]=[[26.1445,91.7362],[26.7,92.2],[27.0844,93.6053]];
 RP["H_GUW-NE_MN"]=[[26.1445,91.7362],[25.6,92.4],[24.8170,93.9368]];
@@ -87,7 +89,8 @@ RP["H_GUW-NE_MZ"]=[[26.1445,91.7362],[25.0,92.0],[23.7271,92.7176]];
 RP["H_GUW-NE_NL"]=[[26.1445,91.7362],[25.8,92.6],[25.6747,94.1100]];
 RP["H_GUW-NE_TR"]=[[26.1445,91.7362],[25.0,91.3],[23.8315,91.2868]];
 
-/* NOTE: No RP for Nagpur ↔ NE here; City mode injects only WH5/Guwa links. */
+/* NOTE: RP contains NE fan-outs, but we hide them from the base network;
+   they’re added only when City Addition is active. */
 
 const keyFor=(a,b)=>`${a}-${b}`;
 const toLonLat=ll=>ll.map(p=>[p[1],p[0]]);
@@ -113,12 +116,13 @@ function expandIDsToLatLon(ids){
 }
 
 /* Build base network; when includeHub=false, hide hub spokes.
-   City mode adds temporary fan-out:
-    - Baseline: WH5 → NE_*
-    - Proposal: WH5 ↔ H_GUW plus H_GUW → NE_* (skip NE_AS self-link) */
+   IMPORTANT: exclude ANY NE_* or H_GUW links from the base set; they are added only in City Addition. */
 function networkGeoJSON(includeHub){
-  const keys=Object.keys(RP).filter(k=> includeHub || !k.includes("H_NAG"))
-                           .filter(k=> !k.includes("H_GUW")); // exclude Guwahati fan-out from base set
+  const keys=Object.keys(RP).filter(k=>
+      (includeHub || !k.includes("H_NAG")) &&         // hide Nagpur spokes unless Hub mode
+      !k.includes("H_GUW") &&                         // never include Guwahati links in base
+      !k.includes("NE_")                              // never include Seven Sisters links in base
+  );
   const features=keys.map(k=>({
     type:"Feature",properties:{id:k},geometry:{type:"LineString",coordinates:toLonLat(RP[k])}
   }));
@@ -131,13 +135,13 @@ function networkGeoJSON(includeHub){
       features.push({ type:"Feature", properties:{id:k}, geometry:{type:"LineString",coordinates:toLonLat(coords)} });
     }
   } else if (SHOW_NE && SHOW_HUB_CITY) {
-    // Proposal: WH5 ↔ H_GUW + H_GUW → NE_* (explicit curved RPs above)
+    // Proposal: WH5 ↔ H_GUW + H_GUW → NE_* (skip NE_AS self-link)
     features.push({
       type:"Feature", properties:{id:"WH5-H_GUW"},
       geometry:{type:"LineString",coordinates:toLonLat(getRoadLatLon("WH5","H_GUW"))}
     });
     for (const id of Object.keys(NE7)) {
-      if (id === "NE_AS") continue; // Guwahati itself
+      if (id === "NE_AS") continue;
       const k = `H_GUW-${id}`;
       const coords = RP[k] ? RP[k] : getRoadLatLon("H_GUW", id);
       features.push({ type:"Feature", properties:{id:k}, geometry:{type:"LineString",coordinates:toLonLat(coords)} });
@@ -161,7 +165,7 @@ const DEFAULT_BEFORE={
   policies:{ capacity_units:10, default_speed_kmph:55, use_hub:false }
 };
 
-/* -------------------- Disruption steps (kept) -------------------- */
+/* -------------------- Disruption steps -------------------- */
 const STEPS=[
   {id:"D1",route:["WH1","WH2"],reroute:[["WH1","WH4"],["WH4","WH2"]],
    cause:["Disruption one.","Delhi to Mumbai corridor is closed near Rajasthan.","All trucks on this corridor are safely paused.","Please click the Correct button to apply the AI fix."],
@@ -213,8 +217,8 @@ window.addEventListener("resize",resizeCanvas);
 
 /* -------------------- base network + highlight layers -------------------- */
 let SHOW_HUB=false;      // Nagpur spokes & marker
-let SHOW_NE=false;       // Seven Sisters visible (+ dynamic white routes)
-let SHOW_HUB_CITY=false; // Guwahati hub marker
+let SHOW_NE=false;       // Seven Sisters (hidden until City Addition)
+let SHOW_HUB_CITY=false; // Guwahati hub marker (proposal stage)
 
 function ensureRoadLayers(){
   const net=networkGeoJSON(SHOW_HUB);
@@ -754,9 +758,9 @@ async function cityAddition(){
   }
   Narrator.clear(); clearAlert(); clearFix();
 
-  // Stage 1: Baseline (no Guwahati hub)
+  // Stage 1: Baseline (Kolkata → NE, no Guwahati hub)
   SHOW_HUB=false; SHOW_HUB_CITY=false;
-  SHOW_NE=true; refreshRoadNetwork();               // fan-out from Kolkata with curved RPs
+  SHOW_NE=true; refreshRoadNetwork();               // adds WH5→NE curved roads
   activateTrucksFromScenario(SCN_CITY_BASE);
 
   const NE_IDS = Object.keys(NE7);
@@ -774,11 +778,10 @@ async function cityAddition(){
   ];
   await Narrator.sayLinesTwice(baselineLines, 900, 0.92);
 
-  // Stage 2: Proposal with Guwahati hub
+  // Stage 2: Proposal (Guwahati hub appears now; fan-out switches to H_GUW)
   await new Promise(r=>setTimeout(r, 900));
-
-  SHOW_HUB=false; SHOW_NE=true; SHOW_HUB_CITY=true; // hub visible; fan-out switches to H_GUW
-  refreshRoadNetwork();                              // refresh so routes swap WH5→NE → H_GUW→NE
+  SHOW_HUB=false; SHOW_NE=true; SHOW_HUB_CITY=true; // reveal H_GUW + swap routes
+  refreshRoadNetwork();
   activateTrucksFromScenario(SCN_CITY_AFTER);
   renderStatsTable(cityAfterStats, NE_IDS);
 
@@ -883,7 +886,7 @@ const mapReady=new Promise(res=>map.on("load",res));
   // spawn trucks from BEFORE scenario
   activateTrucksFromScenario(SCN_BEFORE);
 
-  // initial camera — include base five; City mode fits later
+  // initial camera — include base five; NE roads are hidden until City Addition
   const b=new maplibregl.LngLatBounds(); Object.values(CITY).forEach(c=>b.extend([c.lon,c.lat]));
   map.fitBounds(b,{padding:{top:60,left:60,right:320,bottom:60},duration:800,maxZoom:6.8});
 
