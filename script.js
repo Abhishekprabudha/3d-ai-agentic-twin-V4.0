@@ -801,11 +801,11 @@ async function cityAddition(){
   const baselineLines = [
     "Opening service to the Seven Sisters (Arunachal Pradesh, Assam, Manipur, Meghalaya, Mizoram, Nagaland, Tripura).",
     "Baseline: Serving from the existing network without a Guwahati hub. Other corridors continue as-is.",
-    `Baseline movements (NE flows considered): ${fmtInt(baseS.movements)}.`,
-    `Baseline distance (NE flows): ${fmtKm(baseS.truckKm)}.`,
-    `Average O→D time (NE flows): ${fmtHours(baseS.meanEta)}.`,
-    `90th percentile ETA (NE flows): ${fmtHours(baseS.p90Eta)}.`,
-    `Average truck utilization (NE flows): ${baseS.utilization} percent.`
+    `Baseline movements (North-East flows considered): ${fmtInt(baseS.movements)}.`,
+    `Baseline distance (North-East flows): ${fmtKm(baseS.truckKm)}.`,
+    `Average O→D time (North-East flows): ${fmtHours(baseS.meanEta)}.`,
+    `90th percentile ETA (North-East flows): ${fmtHours(baseS.p90Eta)}.`,
+    `Average truck utilization (North-East flows): ${baseS.utilization} percent.`
   ];
   await Narrator.sayLinesOnce(baselineLines, 900, 0.92);
 
@@ -842,11 +842,11 @@ async function cityAddition(){
   const proposalLines = [
     "Proposal: Add Guwahati hub and reassign the Seven Sisters to it (fan-out from Guwahati).",
     "Other corridors continue concurrently. Kolkata ↔ Guwahati movements are active.",
-    `Truck movements (NE flows) ${mov.dir} by ${mov.pct}% — from ${fmtInt(baseS.movements)} to ${fmtInt(afterS.movements)}.`,
-    `Total truck-km (NE flows) ${km.dir} by ${km.pct}% — from ${fmtKm(baseS.truckKm)} to ${fmtKm(afterS.truckKm)}.`,
-    `Average O→D time (NE flows) ${mean.dir} by ${toHours1(Math.abs(afterS.meanEta-baseS.meanEta))} hours — from ${fmtHours(baseS.meanEta)} to ${fmtHours(afterS.meanEta)}.`,
-    `P90 ETA (NE flows) ${p90.dir} by ${toHours1(Math.abs(afterS.p90Eta-baseS.p90Eta))} hours — from ${fmtHours(baseS.p90Eta)} to ${fmtHours(afterS.p90Eta)}.`,
-    `Average truck utilization (NE flows) ${util.dir} by ${Math.abs(util.pp)} pp — from ${baseS.utilization}% to ${afterS.utilization}%.`
+    `Truck movements (North-East flows) ${mov.dir} by ${mov.pct}% — from ${fmtInt(baseS.movements)} to ${fmtInt(afterS.movements)}.`,
+    `Total truck-km (North-East flows) ${km.dir} by ${km.pct}% — from ${fmtKm(baseS.truckKm)} to ${fmtKm(afterS.truckKm)}.`,
+    `Average O→D time (North-East flows) ${mean.dir} by ${toHours1(Math.abs(afterS.meanEta-baseS.meanEta))} hours — from ${fmtHours(baseS.meanEta)} to ${fmtHours(afterS.meanEta)}.`,
+    `P90 ETA (North-East flows) ${p90.dir} by ${toHours1(Math.abs(afterS.p90Eta-baseS.p90Eta))} hours — from ${fmtHours(baseS.p90Eta)} to ${fmtHours(afterS.p90Eta)}.`,
+    `Average truck utilization (North-East flows) ${util.dir} by ${Math.abs(util.pp)} pp — from ${baseS.utilization}% to ${afterS.utilization}%.`
   ];
   await Narrator.sayLinesOnce(proposalLines, 900, 0.92);
 
@@ -953,4 +953,5 @@ async function fetchOrDefault(file, fallback){
 }
 function tick(){ const now=performance.now(); const dt=Math.min(0.05,(now-__lastTS)/1000); __lastTS=now; __dt=dt; drawFrame(); requestAnimationFrame(tick); }
 requestAnimationFrame(tick);
+
 
